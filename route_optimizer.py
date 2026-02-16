@@ -591,18 +591,18 @@ def _print_recommendation(output: dict):
     print("  HMB ROUTE ASSIGNMENT — Uthangarai Chilling Center (1142)")
     print("═" * 65)
     print()
-    print(f"  📍 New HMB Location: ({inp['lat']:.6f}, {inp['lon']:.6f})")
-    print(f"  🏭 Chilling Center:  ({CC_LAT}, {CC_LON})")
-    print(f"  📏 Distance to CC:   {road_distance(inp['lat'], inp['lon'], CC_LAT, CC_LON):.1f} KM (est. road)")
+    print(f"  [>] New HMB Location: ({inp['lat']:.6f}, {inp['lon']:.6f})")
+    print(f"  [*] Chilling Center:  ({CC_LAT}, {CC_LON})")
+    print(f"  [~] Distance to CC:   {road_distance(inp['lat'], inp['lon'], CC_LAT, CC_LON):.1f} KM (est. road)")
     print()
 
     if rec.is_feasible:
-        print(f"  ✅ RECOMMENDED: Route {rec.route.code} — {rec.route.name}")
+        print(f"  [OK] RECOMMENDED: Route {rec.route.code} -- {rec.route.name}")
     else:
-        print(f"  ⚠️  BEST AVAILABLE: Route {rec.route.code} — {rec.route.name}")
-        print(f"      ⚠️  Warning: {rec.infeasibility_reason}")
+        print(f"  [!] BEST AVAILABLE: Route {rec.route.code} -- {rec.route.name}")
+        print(f"       Warning: {rec.infeasibility_reason}")
 
-    print(f"     Insert between: {rec.prev_stop_name} → {rec.next_stop_name}")
+    print(f"     Insert between: {rec.prev_stop_name} -> {rec.next_stop_name}")
     print(f"     Position: #{rec.position + 1} in sequence")
     print(f"     Extra distance: +{rec.extra_km:.1f} KM")
     print(f"     New route total: {rec.new_total_km:.1f} KM")
@@ -616,7 +616,7 @@ def _print_recommendation(output: dict):
     # All routes ranked
     print("  ─── All Routes Ranked ─────────────────────────────────────")
     for i, r in enumerate(results):
-        feasible_marker = "✅" if r.is_feasible else "❌"
+        feasible_marker = "[OK]" if r.is_feasible else "[X] "
         print(f"  {feasible_marker} #{i+1}  {r.route.code}  {r.route.name:<18s}"
               f"  +{r.extra_km:>6.1f} KM"
               f"  Time: {r.estimated_time_hours:.1f}h"
