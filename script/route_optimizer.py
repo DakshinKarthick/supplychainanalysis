@@ -1050,10 +1050,57 @@ def _print_recommendation(output: dict):
     print()
 
 
+# --- JSON serialization helper ------------------------------------------------
+
+def _result_to_json(output: dict) -> dict:
+    """Convert recommend_route output to a JSON-serializable dict."""
+    rec = output["recommended"]
+    results = output["all_results"]
+    rejected = output["rejected_routes"]
+    inp = output["input"]
+
+    def _serialize_result(r):
+        return {
+            "route_code": r.route.code,
+            "route_name": r.route.name,
+            "extra_km": r.extra_km,
+            "post_2opt_km": r.post_2opt_km,
+            "improvement_km": r.improvement_km,
+            "est_time_h": r.estimated_time_hours,
+            "score": r.score,
+            "feasible": r.is_feasible,
+            "reason": r.infeasibility_reason,
+            "prev_stop": r.prev_stop_name,
+            "next_stop": r.next_stop_name,
+            "capacity": r.route.capacity,
+            "milk_qty": r.route.current_milk_qty,
+            "sequence": r.optimized_stop_order,
+            "hmbs": [
+                {"name": h.name, "lat": h.lat, "lng": h.lon}
+                for h in r.route.hmbs
+            ],
+        }
+
+    json_out = {
+        "type": "insertion",
+        "recommended": _serialize_result(rec) if rec else None,
+        "all_results": [_serialize_result(r) for r in results],
+        "rejected_routes": [
+            {"route_code": rej["route"].code, "route_name": rej["route"].name,
+             "reason": rej["reason"]}
+            for rej in rejected
+        ],
+        "cc": {"lat": CC_LAT, "lng": CC_LON},
+        "new_hmb": {"lat": inp["lat"], "lng": inp["lon"]},
+    }
+    return json_out
+
+
 # --- CLI Entry Point ----------------------------------------------------------
 
 if __name__ == "__main__":
     import argparse
+    import json as _json
 
     parser = argparse.ArgumentParser(
         description="HMB Route Assignment Optimizer V2 for Uthangarai CC"
@@ -1066,10 +1113,15 @@ if __name__ == "__main__":
                         help="Distance calculation mode (default: haversine)")
     parser.add_argument("--road-factor", type=float, default=ROAD_FACTOR,
                         help=f"Road distance multiplier for haversine mode (default: {ROAD_FACTOR})")
+    parser.add_argument("--json", action="store_true",
+                        help="Output JSON instead of formatted text")
     args = parser.parse_args()
 
-    # Allow overriding road factor from CLI
     if args.mode == "haversine":
         ROAD_FACTOR = args.road_factor
 
-    recommend_route(args.lat, args.lon, args.milk_qty, mode=args.mode)
+    output = recommend_route(args.lat, args.lon, args.milk_qty, mode=args.mode,
+                             print_output=not args.json)
+
+    if args.json:
+        print(_json.dumps(_result_to_json(output)))
