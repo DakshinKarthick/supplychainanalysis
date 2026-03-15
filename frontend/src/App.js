@@ -158,7 +158,7 @@ export default function App() {
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid #313244' }}>
-          <h3 style={{ margin: 0, color: '#89b4fa' }}>🚛 Route Optimizer</h3>
+          <h3 style={{ margin: 0, color: '#89b4fa' }}>Route Optimizer</h3>
         </div>
 
         {/* controls */}
@@ -208,7 +208,7 @@ export default function App() {
           {fullResults && (
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #313244' }}>
               <div style={{ color: '#a6e3a1', fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
-                ✅ Full Optimization Complete
+                Full Optimization Complete
               </div>
               <div style={statRow}>
                 <span>Original</span><b>{fullResults.original_km} KM</b>
@@ -248,7 +248,7 @@ export default function App() {
           {insertionResults && insertionResults.length > 0 && (
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #313244' }}>
               <div style={{ color: '#fab387', fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
-                📍 Insertion Results (Ranked)
+                Insertion Results (Ranked)
               </div>
 
               {insertionResults.map((r, i) => (
@@ -258,16 +258,16 @@ export default function App() {
                   borderLeft: `3px solid ${i === 0 ? '#a6e3a1' : '#585b70'}`,
                 }}>
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                    {i === 0 ? '⭐ ' : `#${i+1} `}
+                    {i === 0 ? '#1 ' : `#${i+1} `}
                     {r.route_code} ({r.route_name})
-                    {!r.feasible && <span style={{color:'#f38ba8'}}> ⚠ {r.reason}</span>}
+                    {!r.feasible && <span style={{color:'#f38ba8'}}> {r.reason}</span>}
                   </div>
                   <div>
                     +{r.extra_km} KM | Post-2opt: {r.post_2opt_km} KM | Time: {r.est_time_h}h | Score: {r.score}
                   </div>
                   {i === 0 && (
                     <div style={{ color: '#a6adc8', marginTop: 4 }}>
-                      Insert: {r.prev_stop} → <b style={{color:'#f9e2af'}}>★ NEW</b> → {r.next_stop}
+                      Insert: {r.prev_stop} → <b style={{color:'#f9e2af'}}>NEW</b> → {r.next_stop}
                     </div>
                   )}
                   {r.sequence && i < 3 && (
@@ -314,7 +314,7 @@ export default function App() {
           {newHmb && (
             <CircleMarker center={[newHmb.lat, newHmb.lng]} radius={10}
               pathOptions={{ color: '#f38ba8', fillColor: '#f38ba8', fillOpacity: 0.9 }}>
-              <Popup><b>★ NEW HMB</b></Popup>
+              <Popup><b>NEW HMB</b></Popup>
             </CircleMarker>
           )}
 
