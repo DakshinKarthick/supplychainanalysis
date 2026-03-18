@@ -2,10 +2,8 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-dist/
-build/
-node_modules/
 *.egg
+*.pyc
 
 # Virtual environments
 venv/
@@ -25,5 +23,29 @@ Thumbs.db
 # Pytest
 .pytest_cache/
 
-# Byte-compiled
-*.pyc
+# Temp files
+script/tempCodeRunnerFile.py
+
+# Node / React
+node_modules/
+frontend/build/
+frontend/coverage/
+frontend/.pnp
+frontend/.pnp.js
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tauri / Rust
+frontend/src-tauri/target/
+frontend/src-tauri/gen/schemas
+frontend/src-tauri/Cargo.lock
+
+# PyInstaller
+dist/
+build/
+*.spec
