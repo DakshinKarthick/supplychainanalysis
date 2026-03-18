@@ -121,7 +121,7 @@ def uniform_crossover(p1, p2):
     return [g1 if random.random() < 0.5 else g2 for g1, g2 in zip(p1, p2)], \
            [g2 if random.random() < 0.5 else g1 for g1, g2 in zip(p1, p2)]
 
-def full_route_fitness(genome, all_hmbs, num_routes, capacities, milk_qtys, matrix):
+def full_route_fitness(genome, all_hmbs, num_routes, capacities, milk_qtys, matrix, new_hmb_idx=-1, new_milk_qty=0):
     n = len(all_hmbs)
     assigns, prios = genome[:n], genome[n:]
     route_groups = [[] for _ in range(num_routes)]
@@ -137,14 +137,18 @@ def full_route_fitness(genome, all_hmbs, num_routes, capacities, milk_qtys, matr
         if t > MAX_ROUTE_HOURS:
             time_pen += (t - MAX_ROUTE_HOURS) * 100
         cap = capacities[r_idx] if capacities[r_idx] > 0 else 1
-        if milk_qtys[r_idx] > cap:
-            cap_pen += ((milk_qtys[r_idx] - cap) / cap) * 500
+        route_milk = milk_qtys[r_idx]
+        # Add new HMB's milk to whichever route it's assigned to
+        if new_hmb_idx >= 0 and any(idx == new_hmb_idx for _, idx in grp):
+            route_milk += new_milk_qty
+        if route_milk > cap:
+            cap_pen += ((route_milk - cap) / cap) * 500
 
     empty_pen = sum(50 for g in route_groups if not g)
     return 0.4*tot_dist + 0.2*time_pen + 0.3*cap_pen + empty_pen
 
 
-def ga_full_route_optimize(new_lat=None, new_lon=None, gens=500, pop_size=200, mode="haversine", json_output=False):
+def ga_full_route_optimize(new_lat=None, new_lon=None, new_milk_qty=0, gens=500, pop_size=200, mode="haversine", json_output=False):
     """Run full GA route re-optimization. Returns dict with results."""
     routes = load_route_data()
     num_routes = len(routes)
@@ -188,7 +192,8 @@ def ga_full_route_optimize(new_lat=None, new_lon=None, gens=500, pop_size=200, m
 
     best_g, best_f = None, float("inf")
     for gen in range(gens):
-        fits = [full_route_fitness(g, all_hmbs, num_routes, caps, milk, matrix) for g in pop]
+        new_idx = n - 1 if has_new else -1
+        fits = [full_route_fitness(g, all_hmbs, num_routes, caps, milk, matrix, new_hmb_idx=new_idx, new_milk_qty=new_milk_qty) for g in pop]
         best_idx = min(range(len(fits)), key=lambda i: fits[i])
         if fits[best_idx] < best_f: best_f, best_g = fits[best_idx], pop[best_idx][:]
 
@@ -303,11 +308,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="GA Full Route Re-Optimization")
     parser.add_argument("--lat", type=float, default=None, help="Latitude of new HMB (optional)")
     parser.add_argument("--lon", type=float, default=None, help="Longitude of new HMB (optional)")
+    parser.add_argument("--milk-qty", type=float, default=0, help="Expected milk qty of new HMB (litres/day)")
     parser.add_argument("--mode", choices=["haversine", "osrm"], default="osrm", help="Distance mode")
     parser.add_argument("--gens", type=int, default=500, help="GA generations")
     parser.add_argument("--pop", type=int, default=200, help="Population size")
     parser.add_argument("--json", action="store_true", help="Output JSON instead of text")
     args = parser.parse_args()
 
-    ga_full_route_optimize(args.lat, args.lon, gens=args.gens, pop_size=args.pop,
+    ga_full_route_optimize(args.lat, args.lon, new_milk_qty=args.milk_qty, gens=args.gens, pop_size=args.pop,
                            mode=args.mode, json_output=args.json)

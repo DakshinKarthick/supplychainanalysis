@@ -46,6 +46,7 @@ export default function App() {
   const [fullResults, setFullResults] = useState(null);
   const [insertionResults, setInsertionResults] = useState(null);
   const [newHmb, setNewHmb] = useState(null);
+  const [selectedInsertionIdx, setSelectedInsertionIdx] = useState(0);
   const logRef = useRef(null);
   const eventSourceRef = useRef(null);
 
@@ -120,10 +121,11 @@ export default function App() {
     setInsertionResults(null);
     setFullResults(null);
     setNewHmb(null);
+    setSelectedInsertionIdx(0);
 
     connectSSE();
 
-    const body = { type: runType, mode: 'osrm' };
+    const body = { type: runType, mode: 'haversine' };
 
     if (lat.trim() && lon.trim()) {
       body.lat = parseFloat(lat);
@@ -182,13 +184,9 @@ export default function App() {
           <input value={lon} onChange={e => setLon(e.target.value)}
             placeholder="e.g. 78.55" style={inputStyle} />
 
-          {runType === 'insertion' && (
-            <>
-              <label style={{ fontSize: 13 }}>Expected Milk (litres/day)</label>
-              <input value={milkQty} onChange={e => setMilkQty(e.target.value)}
-                placeholder="e.g. 100" style={inputStyle} />
-            </>
-          )}
+          <label style={{ fontSize: 13 }}>Expected Milk (litres/day)</label>
+          <input value={milkQty} onChange={e => setMilkQty(e.target.value)}
+            placeholder="e.g. 100" style={inputStyle} />
 
           <button onClick={handleRun} disabled={status === 'running'}
             style={{
@@ -252,11 +250,14 @@ export default function App() {
               </div>
 
               {insertionResults.map((r, i) => (
-                <div key={r.route_code} style={{
-                  padding: '8px', marginTop: 6, borderRadius: 6,
-                  background: i === 0 ? '#2a3a2a' : '#313244', fontSize: 12,
-                  borderLeft: `3px solid ${i === 0 ? '#a6e3a1' : '#585b70'}`,
-                }}>
+                <div key={r.route_code}
+                  onClick={() => setSelectedInsertionIdx(i)}
+                  style={{
+                    padding: '8px', marginTop: 6, borderRadius: 6,
+                    background: i === 0 ? '#2a3a2a' : '#313244', fontSize: 12,
+                    borderLeft: `3px solid ${i === 0 ? '#a6e3a1' : '#585b70'}`,
+                    cursor: 'pointer',
+                  }}>
                   <div style={{ fontWeight: 600, marginBottom: 2 }}>
                     {i === 0 ? '#1 ' : `#${i+1} `}
                     {r.route_code} ({r.route_name})
@@ -265,12 +266,10 @@ export default function App() {
                   <div>
                     +{r.extra_km} KM | Post-2opt: {r.post_2opt_km} KM | Time: {r.est_time_h}h | Score: {r.score}
                   </div>
-                  {i === 0 && (
-                    <div style={{ color: '#a6adc8', marginTop: 4 }}>
-                      Insert: {r.prev_stop} → <b style={{color:'#f9e2af'}}>NEW</b> → {r.next_stop}
-                    </div>
-                  )}
-                  {r.sequence && i < 3 && (
+                  <div style={{ color: '#a6adc8', marginTop: 4 }}>
+                    Insert: {r.prev_stop} → <b style={{color:'#f9e2af'}}>NEW</b> → {r.next_stop}
+                  </div>
+                  {r.sequence && (
                     <div style={{ color: '#a6adc8', marginTop: 2 }}>
                       CC → {r.sequence.join(' → ')} → CC
                     </div>
@@ -322,9 +321,26 @@ export default function App() {
           {displayRoutes.map((route, idx) => {
             if (!route.hmbs || route.hmbs.length === 0) return null;
             const color = ROUTE_COLORS[idx % ROUTE_COLORS.length];
+
+            // Build polyline points — if this route is the selected insertion route,
+            // insert the new HMB at the correct sequence position
+            const selResult = insertionResults && insertionResults[selectedInsertionIdx];
+            const isSelectedRoute = selResult && route.route_code === selResult.route_code;
             const points = [];
             if (cc) points.push([cc.lat, cc.lng]);
-            route.hmbs.forEach(h => points.push([h.lat, h.lng]));
+            if (isSelectedRoute && selResult?.sequence && newHmb) {
+              const hmbByName = {};
+              route.hmbs.forEach(h => { hmbByName[h.name] = h; });
+              selResult.sequence.forEach(name => {
+                if (name === 'NEW HMB') {
+                  points.push([newHmb.lat, newHmb.lng]);
+                } else if (hmbByName[name]) {
+                  points.push([hmbByName[name].lat, hmbByName[name].lng]);
+                }
+              });
+            } else {
+              route.hmbs.forEach(h => points.push([h.lat, h.lng]));
+            }
             if (cc) points.push([cc.lat, cc.lng]);
 
             return (

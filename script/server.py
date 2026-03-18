@@ -167,7 +167,8 @@ def _run_optimization(params):
             "--mode", mode, "--json"
         ]
         if lat is not None and lon is not None and str(lat).strip() and str(lon).strip():
-            cmd += ["--lat", str(lat), "--lon", str(lon)]
+            cmd += ["--lat", str(lat), "--lon", str(lon),
+                    "--milk-qty", str(milk_qty or 0)]
 
         data = _run_script(cmd, "Full Route Optimization (GA)")
         if data:
