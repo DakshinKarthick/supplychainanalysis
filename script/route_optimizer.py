@@ -308,7 +308,7 @@ def _parse_lat_lon(coord_str: str) -> Optional[tuple]:
         return None
 
 
-def load_route_summary() -> dict:
+def _load_legacy_route_summary() -> dict:
     """
     Load route summary data from HMB Details_Summary.csv.
 
@@ -351,7 +351,7 @@ def load_route_summary() -> dict:
     return routes_info
 
 
-def load_route_data() -> list:
+def _load_legacy_route_data() -> list:
     """
     Load ordered route sequences with HMB coordinates from Master Data CSV.
     Filters for Uthangarai CC (Plant 1142) only.
@@ -360,7 +360,7 @@ def load_route_data() -> list:
         List of Route objects with ordered HMB sequences.
     """
     master_file = os.path.join(CSV_DIR, "HMB Details_Master Data.csv")
-    summary = load_route_summary()
+    summary = _load_legacy_route_summary()
 
     # Parse master data: group HMBs by route code
     route_hmbs = {}  # route_code -> list of (sequence, HMB)
@@ -442,6 +442,107 @@ def load_route_data() -> list:
     # Sort routes by code for consistent ordering
     routes.sort(key=lambda r: r.code)
     return routes
+
+
+def _load_unified_route_data(csv_path: str) -> list:
+    """
+    Load Route and HMB data from the flattened Unified CSV file.
+    Updates the global CC_LAT and CC_LON based on the first row's CC details.
+    """
+    global CC_LAT, CC_LON
+    
+    route_hmbs = {}
+    summary = {}
+    
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        
+        for row in reader:
+            if not row or len(row) < 16:
+                continue
+                
+            cc_coords_str = row[2].strip()
+            route_code = row[3].strip()
+            route_name = row[4].strip()
+            
+            # parse CC lat/lon and update globals once
+            if cc_coords_str:
+                cc_point = _parse_lat_lon(cc_coords_str)
+                if cc_point:
+                    CC_LAT, CC_LON = cc_point
+            
+            if not route_code:
+                continue
+                
+            if route_code not in summary:
+                summary[route_code] = {
+                    "route_name": route_name,
+                    "capacity": int(float(row[5])) if row[5].strip() else 0,
+                    "milk_qty": float(row[6]) if row[6].strip() else 0.0,
+                    "per_day_km": float(row[7]) if row[7].strip() else 0.0,
+                    "uti_percent": float(row[8]) if row[8].strip() else 0.0,
+                    "transporter_name": row[9].strip(),
+                    "vehicle_type": row[10].strip(),
+                }
+                route_hmbs[route_code] = {"name": route_name, "hmbs": []}
+                
+            hmb_coords_str = row[14].strip()
+            hmb_c = _parse_lat_lon(hmb_coords_str)
+            if not hmb_c:
+                continue
+                
+            seq_str = row[11].strip()
+            dist_str = row[15].strip()
+            
+            sequence = int(float(seq_str)) if seq_str else 0
+            distance = float(dist_str) if dist_str else 0.0
+            
+            hmb = HMB(
+                sap_code=row[12].strip(),
+                name=row[13].strip(),
+                lat=hmb_c[0],
+                lon=hmb_c[1],
+                sequence=sequence,
+                distance_km=distance,
+            )
+            route_hmbs[route_code]["hmbs"].append((sequence, hmb))
+
+    # Build Route objects
+    routes = []
+    for route_code, data in route_hmbs.items():
+        # Sort HMBs by sequence
+        sorted_hmbs = [hmb for _, hmb in sorted(data["hmbs"], key=lambda x: x[0])]
+        info = summary.get(route_code, {})
+
+        route = Route(
+            code=route_code,
+            name=data["name"] or info.get("route_name", ""),
+            hmbs=sorted_hmbs,
+            total_km=info.get("per_day_km", 0.0),
+            capacity=info.get("capacity", 0),
+            current_milk_qty=info.get("milk_qty", 0.0),
+            uti_percent=info.get("uti_percent", 0.0),
+            transporter=info.get("transporter_name", ""),
+            vehicle_type=info.get("vehicle_type", ""),
+        )
+        routes.append(route)
+
+    # Sort routes by code
+    routes.sort(key=lambda r: r.code)
+    return routes
+
+
+def load_route_data(csv_path: Optional[str] = None) -> list:
+    """
+    Main entry point for loading routes. Uses Unified CSV if uploaded,
+    otherwise falls back to the legacy CSV format.
+    """
+    uploaded_path = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    if os.path.exists(uploaded_path):
+        return _load_unified_route_data(uploaded_path)
+    
+    return _load_legacy_route_data()
 
 
 # --- Route Calculations -------------------------------------------------------

@@ -14,6 +14,7 @@ import queue
 import subprocess
 import sys
 import threading
+import pandas as pd
 
 from flask import Flask, jsonify, request, Response
 from flask_cors import CORS
@@ -38,14 +39,15 @@ def send_event(data: dict):
 # ─── Load initial routes (reuse route_optimizer's loader) ────────────────────
 
 sys.path.insert(0, SCRIPT_DIR)
-from route_optimizer import load_route_data, CC_LAT, CC_LON
+import route_optimizer
 
 
 @app.route("/api/routes", methods=["GET"])
 def get_routes():
     """Return initial route data for map display."""
     try:
-        routes = load_route_data()
+        routes = route_optimizer.load_route_data()
+        cc_lat, cc_lon = route_optimizer.CC_LAT, route_optimizer.CC_LON
         routes_json = []
         for r in routes:
             routes_json.append({
@@ -61,7 +63,33 @@ def get_routes():
                     for h in r.hmbs
                 ],
             })
-        return jsonify({"routes": routes_json, "cc": {"lat": CC_LAT, "lng": CC_LON}})
+        return jsonify({"routes": routes_json, "cc": {"lat": cc_lat, "lng": cc_lon}})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/upload", methods=["POST"])
+def upload_csv():
+    """Upload a new Unified CSV file and reload the backend's memory."""
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "No file part"}), 400
+        file = request.files["file"]
+        if file.filename == "":
+            return jsonify({"error": "No selected file"}), 400
+        if file:
+            filepath = os.path.join(SCRIPT_DIR, "..", "csv_files", "Uploaded_Unified_Route_Data.csv")
+            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            
+            if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
+                df = pd.read_excel(file)
+                df.to_csv(filepath, index=False)
+            else:
+                file.save(filepath)
+            
+            # Reparse to load the new CC coordinates globally into memory
+            route_optimizer.load_route_data()
+            return jsonify({"status": "success"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -157,8 +185,12 @@ def _run_optimization(params):
         ]
         data = _run_script(cmd, "Insertion Optimization")
         if data:
-            send_event({"type": "insertion_results", "data": data.get("all_results", []),
-                         "new_hmb": data.get("new_hmb")})
+            send_event({
+                "type": "insertion_results", 
+                "data": data.get("all_results", []),
+                "new_hmb": data.get("new_hmb"),
+                "cc": data.get("cc")
+            })
 
     elif run_type == "full":
         # Full GA re-optimization via route_GA.py
@@ -187,7 +219,7 @@ def run_optimization():
 
 
 if __name__ == "__main__":
-    print("Route Optimization Server starting on http://localhost:5050")
+    print("Route Optimization Server starting on http://localhost:5051")
     print(f"Script dir: {SCRIPT_DIR}")
     print(f"Python: {PYTHON}")
     app.run(host="0.0.0.0", port=5050, debug=False, threaded=True)

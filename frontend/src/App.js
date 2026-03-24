@@ -56,12 +56,39 @@ export default function App() {
   }, [logs]);
 
   /* fetch initial routes on mount */
-  useEffect(() => {
-    fetch(`${API}/api/routes`)
+  const fetchRoutes = () => {
+    fetch(`${API}/api/routes?t=${Date.now()}`, { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { setRoutes(d.routes || []); setCc(d.cc); })
-      .catch(() => {});
+      .catch((err) => console.error("Error fetching routes:", err));
+  };
+
+  useEffect(() => {
+    fetchRoutes();
   }, []);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setStatus('running');
+    setPhase('Uploading Data...');
+    const formData = new FormData();
+    formData.append("file", file);
+    try {
+      await fetch(`${API}/api/upload`, {
+        method: 'POST',
+        body: formData,
+      });
+      fetchRoutes();
+      setStatus('idle');
+      setPhase('');
+      setLogs(prev => [...prev, `Successfully uploaded and parsed: ${file.name}`]);
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+      setLogs(prev => [...prev, `Error uploading file: ${err.message}`]);
+    }
+  };
 
   /* SSE listener */
   const connectSSE = useCallback(() => {
@@ -86,6 +113,9 @@ export default function App() {
         case 'insertion_results':
           setInsertionResults(msg.data);
           if (msg.new_hmb) setNewHmb(msg.new_hmb);
+          if (msg.cc) setCc(msg.cc);
+          // Also set the routes map to display all routes (which includes the cc changes)
+          fetchRoutes();
           break;
         case 'full_results':
           setFullResults(msg.data);
@@ -144,6 +174,11 @@ export default function App() {
 
   /* ── derive map data ───────────────────────────────────────────────────── */
   const displayRoutes = fullResults?.routes ?? routes;
+  const getRouteColor = (routeCode) => {
+    const idx = displayRoutes.findIndex(r => r.route_code === routeCode);
+    return idx !== -1 ? ROUTE_COLORS[idx % ROUTE_COLORS.length] : '#888888';
+  };
+
   const allPositions = [];
   if (cc) allPositions.push([cc.lat, cc.lng]);
   displayRoutes.forEach(r => r.hmbs?.forEach(h => allPositions.push([h.lat, h.lng])));
@@ -165,6 +200,26 @@ export default function App() {
 
         {/* controls */}
         <div style={{ padding: 16, borderBottom: '1px solid #313244' }}>
+
+          {/* Data Upload UI */}
+          <div style={{ marginBottom: 16, padding: 12, border: '1px dashed #585b70', borderRadius: 4, background: '#181825' }}>
+            <label style={{ fontSize: 13, display: 'block', marginBottom: 8, fontWeight: 'bold' }}>Data Source</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <label htmlFor="csv-upload" style={{ cursor: 'pointer', background: '#313244', padding: '6px 12px', borderRadius: 4, fontSize: 13, border: '1px solid #45475a', flex: 1, textAlign: 'center' }}>
+                Upload CSV / Excel
+              </label>
+              <input id="csv-upload" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} />
+            </div>
+
+            <details style={{ marginTop: 8, fontSize: 11, color: '#a6adc8' }}>
+              <summary style={{ cursor: 'pointer', userSelect: 'none' }}>Expected Data Format</summary>
+              <div style={{ marginTop: 6, lineHeight: 1.5 }}>
+                Ensure your file includes these exact columns:<br />
+                <code>CC Code, CC Name, CC Lat & Lon, Route Code, Route Name, Route Capacity, Route Milk Qty, Per Day KM, UTI Percent, Transporter Name, Vehicle Type, HMB Sequence, HMB SAP Code, HMB Name, HMB Lat & Lon, HMB Distance KM</code>
+              </div>
+            </details>
+          </div>
+
           <label style={{ fontSize: 13 }}>Optimization Type</label>
           <select value={runType} onChange={e => setRunType(e.target.value)}
             style={inputStyle}>
@@ -173,13 +228,13 @@ export default function App() {
           </select>
 
           <label style={{ fontSize: 13 }}>
-            New HMB Latitude {runType === 'full' && <span style={{color:'#6c7086'}}>(optional)</span>}
+            New HMB Latitude {runType === 'full' && <span style={{ color: '#6c7086' }}>(optional)</span>}
           </label>
           <input value={lat} onChange={e => setLat(e.target.value)}
             placeholder="e.g. 12.35" style={inputStyle} />
 
           <label style={{ fontSize: 13 }}>
-            New HMB Longitude {runType === 'full' && <span style={{color:'#6c7086'}}>(optional)</span>}
+            New HMB Longitude {runType === 'full' && <span style={{ color: '#6c7086' }}>(optional)</span>}
           </label>
           <input value={lon} onChange={e => setLon(e.target.value)}
             placeholder="e.g. 78.55" style={inputStyle} />
@@ -212,11 +267,11 @@ export default function App() {
                 <span>Original</span><b>{fullResults.original_km} KM</b>
               </div>
               <div style={statRow}>
-                <span>Optimized</span><b style={{color:'#a6e3a1'}}>{fullResults.optimized_km} KM</b>
+                <span>Optimized</span><b style={{ color: '#a6e3a1' }}>{fullResults.optimized_km} KM</b>
               </div>
               <div style={statRow}>
                 <span>Saved</span>
-                <b style={{color:'#f9e2af'}}>{fullResults.saving_km} KM ({fullResults.saving_pct}%)</b>
+                <b style={{ color: '#f9e2af' }}>{fullResults.saving_km} KM ({fullResults.saving_pct}%)</b>
               </div>
 
               {/* Per-route details */}
@@ -225,13 +280,13 @@ export default function App() {
                   <div key={r.route_code} style={{
                     padding: '8px', marginTop: 6, borderRadius: 6,
                     background: '#313244', fontSize: 12,
-                    borderLeft: `3px solid ${ROUTE_COLORS[i % ROUTE_COLORS.length]}`,
+                    borderLeft: `4px solid ${getRouteColor(r.route_code)}`,
                   }}>
                     <div style={{ fontWeight: 600, marginBottom: 4 }}>
                       {r.route_code} ({r.route_name}) — {r.hmb_count} HMBs
                     </div>
                     <div>{r.distance_km} KM ({r.diff_km >= 0 ? '+' : ''}{r.diff_km}) | {r.est_time_h}h
-                      {!r.time_ok && <span style={{color:'#f38ba8'}}> ⚠ OVER TIME</span>}
+                      {!r.time_ok && <span style={{ color: '#f38ba8' }}> ⚠ OVER TIME</span>}
                     </div>
                     <div style={{ color: '#a6adc8', marginTop: 4 }}>
                       CC → {r.sequence?.join(' → ')} → CC
@@ -249,33 +304,39 @@ export default function App() {
                 Insertion Results (Ranked)
               </div>
 
-              {insertionResults.map((r, i) => (
-                <div key={r.route_code}
-                  onClick={() => setSelectedInsertionIdx(i)}
-                  style={{
-                    padding: '8px', marginTop: 6, borderRadius: 6,
-                    background: i === 0 ? '#2a3a2a' : '#313244', fontSize: 12,
-                    borderLeft: `3px solid ${i === 0 ? '#a6e3a1' : '#585b70'}`,
-                    cursor: 'pointer',
-                  }}>
-                  <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                    {i === 0 ? '#1 ' : `#${i+1} `}
-                    {r.route_code} ({r.route_name})
-                    {!r.feasible && <span style={{color:'#f38ba8'}}> {r.reason}</span>}
-                  </div>
-                  <div>
-                    +{r.extra_km} KM | Post-2opt: {r.post_2opt_km} KM | Time: {r.est_time_h}h | Score: {r.score}
-                  </div>
-                  <div style={{ color: '#a6adc8', marginTop: 4 }}>
-                    Insert: {r.prev_stop} → <b style={{color:'#f9e2af'}}>NEW</b> → {r.next_stop}
-                  </div>
-                  {r.sequence && (
-                    <div style={{ color: '#a6adc8', marginTop: 2 }}>
-                      CC → {r.sequence.join(' → ')} → CC
+              {insertionResults.map((r, i) => {
+                const isSelected = i === selectedInsertionIdx;
+                const routeColor = getRouteColor(r.route_code);
+                return (
+                  <div key={r.route_code}
+                    onClick={() => setSelectedInsertionIdx(i)}
+                    style={{
+                      padding: '8px', marginTop: 6, borderRadius: 6,
+                      background: isSelected ? '#2a3a2a' : '#313244', fontSize: 12,
+                      borderLeft: `4px solid ${routeColor}`,
+                      cursor: 'pointer',
+                      opacity: isSelected ? 1 : 0.6,
+                    }}>
+                    <div style={{ fontWeight: 600, marginBottom: 2 }}>
+                      <span style={{ color: routeColor, marginRight: 6 }}>⬤</span>
+                      {i === 0 ? '#1 ' : `#${i + 1} `}
+                      {r.route_code} ({r.route_name})
+                      {!r.feasible && <span style={{ color: '#f38ba8' }}> {r.reason}</span>}
                     </div>
-                  )}
-                </div>
-              ))}
+                    <div>
+                      +{r.extra_km} KM | Post-2opt: {r.post_2opt_km} KM | Time: {r.est_time_h}h | Score: {r.score}
+                    </div>
+                    <div style={{ color: '#a6adc8', marginTop: 4 }}>
+                      Insert: {r.prev_stop} → <b style={{ color: '#f9e2af' }}>NEW</b> → {r.next_stop}
+                    </div>
+                    {r.sequence && (
+                      <div style={{ color: '#a6adc8', marginTop: 2 }}>
+                        CC → {r.sequence.join(' → ')} → CC
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
