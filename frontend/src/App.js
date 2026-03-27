@@ -155,7 +155,7 @@ export default function App() {
 
     connectSSE();
 
-    const body = { type: runType, mode: 'haversine' };
+    const body = { type: runType, mode: 'osrm' };
 
     if (lat.trim() && lon.trim()) {
       body.lat = parseFloat(lat);

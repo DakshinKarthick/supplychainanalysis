@@ -538,7 +538,9 @@ def load_route_data(csv_path: Optional[str] = None) -> list:
     Main entry point for loading routes. Uses Unified CSV if uploaded,
     otherwise falls back to the legacy CSV format.
     """
-    uploaded_path = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    app_data_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "HatsunVRP")
+    uploaded_path = os.path.join(app_data_dir, "Uploaded_Unified_Route_Data.csv")
+    
     if os.path.exists(uploaded_path):
         return _load_unified_route_data(uploaded_path)
     
@@ -1210,7 +1212,7 @@ if __name__ == "__main__":
     parser.add_argument("--lon", type=float, required=True, help="Longitude of new HMB")
     parser.add_argument("--milk-qty", type=float, required=True,
                         help="Expected daily milk volume (liters) from the new HMB")
-    parser.add_argument("--mode", choices=["haversine", "osrm"], default="haversine",
+    parser.add_argument("--mode", choices=["haversine", "osrm"], default="osrm",
                         help="Distance calculation mode (default: haversine)")
     parser.add_argument("--road-factor", type=float, default=ROAD_FACTOR,
                         help=f"Road distance multiplier for haversine mode (default: {ROAD_FACTOR})")
