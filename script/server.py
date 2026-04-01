@@ -78,10 +78,10 @@ def upload_csv():
         if file.filename == "":
             return jsonify({"error": "No selected file"}), 400
         if file:
-            # Change this to use the user's AppData folder so we don't hit Permission Denied
-            app_data_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "HatsunVRP")
-            os.makedirs(app_data_dir, exist_ok=True)
-            filepath = os.path.join(app_data_dir, "Uploaded_Unified_Route_Data.csv")
+            # Save to the csv_files directory so all scripts can find it
+            csv_dir = os.path.join(SCRIPT_DIR, "..", "csv_files")
+            os.makedirs(csv_dir, exist_ok=True)
+            filepath = os.path.join(csv_dir, "Uploaded_Unified_Route_Data.csv")
             
             if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
                 df = pd.read_excel(file)

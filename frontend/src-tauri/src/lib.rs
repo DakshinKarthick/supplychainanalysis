@@ -8,15 +8,25 @@ static FLASK_PROCESS: Mutex<Option<Child>> = Mutex::new(None);
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
-            // Find the resource directory where Tauri placed our scripts
-            let script_dir = app.path().resource_dir().unwrap().join("script");
+            // In dev mode, scripts live at ../../script relative to src-tauri/
+            // In production, they are bundled into the resource directory
+            let script_dir = if cfg!(debug_assertions) {
+                let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+                manifest_dir.join("..").join("..").join("script")
+            } else {
+                app.path().resource_dir().unwrap().join("script")
+            };
             let server_path = script_dir.join("server.py");
             
             println!("Starting Flask from: {:?}", server_path);
+            println!("Script dir exists: {}", script_dir.exists());
+            println!("server.py exists: {}", server_path.exists());
 
             match Command::new("python")
                 .arg(&server_path)
                 .current_dir(&script_dir)
+                .stdout(std::process::Stdio::inherit())
+                .stderr(std::process::Stdio::inherit())
                 .spawn()
             {
                 Ok(child) => {

@@ -538,11 +538,21 @@ def load_route_data(csv_path: Optional[str] = None) -> list:
     Main entry point for loading routes. Uses Unified CSV if uploaded,
     otherwise falls back to the legacy CSV format.
     """
+    # Check csv_files/ directory first (where server.py saves uploads)
+    csv_dir_uploaded = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    if os.path.exists(csv_dir_uploaded):
+        return _load_unified_route_data(csv_dir_uploaded)
+    
+    # Fallback: check AppData (legacy location)
     app_data_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "HatsunVRP")
     uploaded_path = os.path.join(app_data_dir, "Uploaded_Unified_Route_Data.csv")
-    
     if os.path.exists(uploaded_path):
         return _load_unified_route_data(uploaded_path)
+    
+    # Check for bundled Unified_Route_Data.csv
+    unified_path = os.path.join(CSV_DIR, "Unified_Route_Data.csv")
+    if os.path.exists(unified_path):
+        return _load_unified_route_data(unified_path)
     
     return _load_legacy_route_data()
 
