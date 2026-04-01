@@ -59,6 +59,9 @@ OSRM_BASE_URL = "http://router.project-osrm.org"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_DIR = os.path.join(BASE_DIR, "..", "csv_files")
 
+# Direct override: if server.py sets this after an upload, we always use it.
+UPLOADED_CSV_PATH = None
+
 
 # --- Data Structures ---------------------------------------------------------
 
@@ -535,13 +538,46 @@ def _load_unified_route_data(csv_path: str) -> list:
 
 def load_route_data(csv_path: Optional[str] = None) -> list:
     """
-    Main entry point for loading routes. Uses Unified CSV if uploaded,
-    otherwise falls back to the legacy CSV format.
+    Main entry point for loading routes. Priority order:
+      1. Direct override (UPLOADED_CSV_PATH) set by server.py after an upload
+      2. AppData\\Local\\HatsunVRP (writable, production upload destination)
+      3. csv_files/Uploaded_Unified_Route_Data.csv (dev upload destination)
+      4. csv_files/Unified_Route_Data.csv (bundled default)
+      5. Legacy two-file CSV format
     """
-    uploaded_path = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    global UPLOADED_CSV_PATH
+
+    # 1. Explicit path override (set by server.py right after saving the file)
+    if UPLOADED_CSV_PATH and os.path.exists(UPLOADED_CSV_PATH):
+        return _load_unified_route_data(UPLOADED_CSV_PATH)
+
+    # 2. AppData\Local\HatsunVRP (Tauri sets HATSUN_DATA_DIR; subprocess scripts
+    #    read from there too)
+    data_dir = os.environ.get("HATSUN_DATA_DIR")
+    if data_dir:
+        appdata_path = os.path.join(data_dir, "Uploaded_Unified_Route_Data.csv")
+        if os.path.exists(appdata_path):
+            UPLOADED_CSV_PATH = appdata_path
+            return _load_unified_route_data(appdata_path)
+
+    # 3. Fallback AppData path (hardcoded, for subprocess scripts that don't
+    #    inherit the env var in older builds)
+    app_data_dir = os.path.join(os.path.expanduser("~"), "AppData", "Local", "HatsunVRP")
+    uploaded_path = os.path.join(app_data_dir, "Uploaded_Unified_Route_Data.csv")
     if os.path.exists(uploaded_path):
+        UPLOADED_CSV_PATH = uploaded_path
         return _load_unified_route_data(uploaded_path)
-    
+
+    # 4. Dev upload destination
+    csv_dir_uploaded = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    if os.path.exists(csv_dir_uploaded):
+        return _load_unified_route_data(csv_dir_uploaded)
+
+    # 5. Bundled default
+    unified_path = os.path.join(CSV_DIR, "Unified_Route_Data.csv")
+    if os.path.exists(unified_path):
+        return _load_unified_route_data(unified_path)
+
     return _load_legacy_route_data()
 
 
@@ -1210,7 +1246,7 @@ if __name__ == "__main__":
     parser.add_argument("--lon", type=float, required=True, help="Longitude of new HMB")
     parser.add_argument("--milk-qty", type=float, required=True,
                         help="Expected daily milk volume (liters) from the new HMB")
-    parser.add_argument("--mode", choices=["haversine", "osrm"], default="haversine",
+    parser.add_argument("--mode", choices=["haversine", "osrm"], default="osrm",
                         help="Distance calculation mode (default: haversine)")
     parser.add_argument("--road-factor", type=float, default=ROAD_FACTOR,
                         help=f"Road distance multiplier for haversine mode (default: {ROAD_FACTOR})")

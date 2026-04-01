@@ -60,9 +60,63 @@ def route_distance_from_matrix(order, matrix):
     if not order: return 0.0
     return matrix[0][order[0]] + sum(matrix[order[i]][order[i+1]] for i in range(len(order)-1)) + matrix[order[-1]][0]
 
+def _parse_lat_lon(coord_str):
+    """Parse 'lat, lon' string into (float, float). Returns None on failure."""
+    if not coord_str or not coord_str.strip():
+        return None
+    try:
+        parts = coord_str.strip().split(",")
+        if len(parts) != 2: return None
+        lat, lon = float(parts[0].strip()), float(parts[1].strip())
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return (lat, lon)
+    except (ValueError, IndexError):
+        pass
+    return None
+
+def _load_unified_route_data(csv_path):
+    """Load Route and HMB data from unified CSV. Updates CC_LAT/CC_LON."""
+    global CC_LAT, CC_LON
+    route_hmbs = {}
+    summary = {}
+    with open(csv_path, "r", encoding="utf-8") as f:
+        reader = csv.reader(f); next(reader)
+        for row in reader:
+            if not row or len(row) < 16: continue
+            cc_coords_str = row[2].strip()
+            route_code = row[3].strip()
+            route_name = row[4].strip()
+            if cc_coords_str:
+                cc_point = _parse_lat_lon(cc_coords_str)
+                if cc_point:
+                    CC_LAT, CC_LON = cc_point
+            if not route_code: continue
+            if route_code not in summary:
+                summary[route_code] = {
+                    "route_name": route_name,
+                    "capacity": int(float(row[5])) if row[5].strip() else 0,
+                    "milk_qty": float(row[6]) if row[6].strip() else 0.0,
+                }
+                route_hmbs[route_code] = {"name": route_name, "hmbs": []}
+            hmb_c = _parse_lat_lon(row[14].strip())
+            if not hmb_c: continue
+            seq = int(float(row[11].strip())) if row[11].strip() else 0
+            dist = float(row[15].strip()) if row[15].strip() else 0.0
+            route_hmbs[route_code]["hmbs"].append(
+                (seq, HMB(row[12].strip(), row[13].strip(), hmb_c[0], hmb_c[1], seq, dist)))
+
+    return sorted([Route(code, d["name"] or summary.get(code, {}).get("route_name", ""),
+                         [h for _, h in sorted(d["hmbs"], key=lambda x: x[0])],
+                         summary.get(code, {}).get("capacity", 0),
+                         summary.get(code, {}).get("milk_qty", 0.0))
+                   for code, d in route_hmbs.items()], key=lambda r: r.code)
+
 def load_route_summary():
     routes_info = {}
-    with open(os.path.join(CSV_DIR, "HMB Details_Summary.csv"), "r", encoding="utf-8") as f:
+    summary_path = os.path.join(CSV_DIR, "HMB Details_Summary.csv")
+    if not os.path.exists(summary_path):
+        return routes_info
+    with open(summary_path, "r", encoding="utf-8") as f:
         reader = csv.reader(f); next(reader)
         for row in reader:
             if not row or not row[0].strip() or row[0].strip() == "Grand Total": continue
@@ -75,10 +129,14 @@ def load_route_summary():
                 }
     return routes_info
 
-def load_route_data():
+def _load_legacy_route_data():
+    """Load from legacy HMB Details_Master Data.csv."""
     summary = load_route_summary()
     route_hmbs = {}
-    with open(os.path.join(CSV_DIR, "HMB Details_Master Data.csv"), "r", encoding="utf-8") as f:
+    master_path = os.path.join(CSV_DIR, "HMB Details_Master Data.csv")
+    if not os.path.exists(master_path):
+        return []
+    with open(master_path, "r", encoding="utf-8") as f:
         reader = csv.reader(f); next(reader)
         for row in reader:
             if len(row) < 11: continue
@@ -95,6 +153,19 @@ def load_route_data():
                          summary.get(code, {}).get("capacity", 0),
                          summary.get(code, {}).get("milk_qty", 0.0))
                    for code, d in route_hmbs.items()], key=lambda r: r.code)
+
+def load_route_data():
+    """Load routes: check uploaded unified CSV first, then bundled unified, then legacy."""
+    # Check for uploaded unified CSV
+    uploaded_path = os.path.join(CSV_DIR, "Uploaded_Unified_Route_Data.csv")
+    if os.path.exists(uploaded_path):
+        return _load_unified_route_data(uploaded_path)
+    # Check for bundled unified CSV
+    unified_path = os.path.join(CSV_DIR, "Unified_Route_Data.csv")
+    if os.path.exists(unified_path):
+        return _load_unified_route_data(unified_path)
+    # Fallback to legacy
+    return _load_legacy_route_data()
 
 def estimate_route_time(total_km, num_stops):
     return (total_km / AVG_SPEED_KMH) + (num_stops * AVG_STOP_TIME_HOURS)
@@ -309,7 +380,7 @@ if __name__ == "__main__":
     parser.add_argument("--lat", type=float, default=None, help="Latitude of new HMB (optional)")
     parser.add_argument("--lon", type=float, default=None, help="Longitude of new HMB (optional)")
     parser.add_argument("--milk-qty", type=float, default=0, help="Expected milk qty of new HMB (litres/day)")
-    parser.add_argument("--mode", choices=["haversine", "osrm"], default="osrm", help="Distance mode")
+    parser.add_argument("--mode", choices=["haversine", "osrm"], default="haversine", help="Distance mode")
     parser.add_argument("--gens", type=int, default=500, help="GA generations")
     parser.add_argument("--pop", type=int, default=200, help="Population size")
     parser.add_argument("--json", action="store_true", help="Output JSON instead of text")

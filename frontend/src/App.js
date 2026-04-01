@@ -13,8 +13,7 @@ L.Marker.prototype.options.icon = L.icon({
   iconSize: [25, 41],
   iconAnchor: [12, 41],
 });
-
-const API = 'http://localhost:5050';
+const API = 'http://127.0.0.1:5050';
 
 const ROUTE_COLORS = [
   '#e6194b', '#3cb44b', '#4363d8', '#f58231',
@@ -47,6 +46,8 @@ export default function App() {
   const [insertionResults, setInsertionResults] = useState(null);
   const [newHmb, setNewHmb] = useState(null);
   const [selectedInsertionIdx, setSelectedInsertionIdx] = useState(0);
+  const [distanceMode, setDistanceMode] = useState('haversine');
+  const [uploadedFileName, setUploadedFileName] = useState(null);
   const logRef = useRef(null);
   const eventSourceRef = useRef(null);
 
@@ -58,7 +59,10 @@ export default function App() {
   /* fetch initial routes on mount */
   const fetchRoutes = () => {
     fetch(`${API}/api/routes?t=${Date.now()}`, { cache: 'no-store' })
-      .then(r => r.json())
+      .then(async r => {
+        if (!r.ok) throw new Error(`Server returned ${r.status}`);
+        return r.json();
+      })
       .then(d => { setRoutes(d.routes || []); setCc(d.cc); })
       .catch((err) => console.error("Error fetching routes:", err));
   };
@@ -75,13 +79,18 @@ export default function App() {
     const formData = new FormData();
     formData.append("file", file);
     try {
-      await fetch(`${API}/api/upload`, {
+      const res = await fetch(`${API}/api/upload`, {
         method: 'POST',
         body: formData,
       });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Upload failed (${res.status}): ${errText}`);
+      }
       fetchRoutes();
       setStatus('idle');
       setPhase('');
+      setUploadedFileName(file.name);
       setLogs(prev => [...prev, `Successfully uploaded and parsed: ${file.name}`]);
     } catch (err) {
       console.error(err);
@@ -155,7 +164,7 @@ export default function App() {
 
     connectSSE();
 
-    const body = { type: runType, mode: 'haversine' };
+    const body = { type: runType, mode: distanceMode };
 
     if (lat.trim() && lon.trim()) {
       body.lat = parseFloat(lat);
@@ -165,11 +174,21 @@ export default function App() {
       body.milk_qty = parseFloat(milkQty);
     }
 
-    await fetch(`${API}/api/run`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
+    try {
+      const res = await fetch(`${API}/api/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`Run optimization failed: ${res.status}`);
+      }
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+      setPhase('Error');
+      setLogs(prev => [...prev, `Error running optimization: ${err.message}`]);
+    }
   };
 
   /* ── derive map data ───────────────────────────────────────────────────── */
@@ -194,8 +213,16 @@ export default function App() {
         width: 400, minWidth: 360, background: '#1e1e2e', color: '#cdd6f4',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
-        <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid #313244' }}>
+        <div style={{ padding: '16px 16px 8px', borderBottom: '1px solid #313244', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <h3 style={{ margin: 0, color: '#89b4fa' }}>Route Optimizer</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 11, color: '#6c7086' }}>Mode:</span>
+            <select value={distanceMode} onChange={e => setDistanceMode(e.target.value)}
+              style={{ background: '#313244', color: '#cdd6f4', border: '1px solid #45475a', borderRadius: 4, fontSize: 11, padding: '3px 6px', cursor: 'pointer' }}>
+              <option value="haversine">Haversine</option>
+              <option value="osrm">OSRM</option>
+            </select>
+          </div>
         </div>
 
         {/* controls */}
@@ -210,6 +237,12 @@ export default function App() {
               </label>
               <input id="csv-upload" type="file" accept=".csv,.xlsx,.xls" onChange={handleFileUpload} style={{ display: 'none' }} />
             </div>
+            {uploadedFileName && (
+              <div style={{ marginTop: 6, fontSize: 11, color: '#a6e3a1', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <span>📄</span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{uploadedFileName}</span>
+              </div>
+            )}
 
             <details style={{ marginTop: 8, fontSize: 11, color: '#a6adc8' }}>
               <summary style={{ cursor: 'pointer', userSelect: 'none' }}>Expected Data Format</summary>
