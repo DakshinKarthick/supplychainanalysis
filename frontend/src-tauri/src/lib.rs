@@ -22,9 +22,17 @@ pub fn run() {
             println!("Script dir exists: {}", script_dir.exists());
             println!("server.py exists: {}", server_path.exists());
 
+            // Compute a writable data dir for uploads: AppData\Local\HatsunVRP
+            let data_dir = app.path().app_local_data_dir().unwrap_or_else(|_| {
+                std::path::PathBuf::from(std::env::var("LOCALAPPDATA").unwrap_or_default())
+                    .join("HatsunVRP")
+            });
+            std::fs::create_dir_all(&data_dir).ok();
+
             match Command::new("python")
                 .arg(&server_path)
                 .current_dir(&script_dir)
+                .env("HATSUN_DATA_DIR", &data_dir)
                 .stdout(std::process::Stdio::inherit())
                 .stderr(std::process::Stdio::inherit())
                 .spawn()

@@ -78,20 +78,27 @@ def upload_csv():
         if file.filename == "":
             return jsonify({"error": "No selected file"}), 400
         if file:
-            # Save to the csv_files directory so all scripts can find it
-            csv_dir = os.path.join(SCRIPT_DIR, "..", "csv_files")
+            # In production, HATSUN_DATA_DIR is set by Tauri to AppData\Local\HatsunVRP
+            # (a writable location). In dev, fall back to the relative csv_files dir.
+            data_dir = os.environ.get("HATSUN_DATA_DIR")
+            if data_dir:
+                csv_dir = data_dir
+            else:
+                csv_dir = os.path.join(SCRIPT_DIR, "..", "csv_files")
             os.makedirs(csv_dir, exist_ok=True)
             filepath = os.path.join(csv_dir, "Uploaded_Unified_Route_Data.csv")
-            
+
             if file.filename.endswith(".xlsx") or file.filename.endswith(".xls"):
                 df = pd.read_excel(file)
                 df.to_csv(filepath, index=False)
             else:
                 file.save(filepath)
-            
+
+            # Tell route_optimizer where to find the uploaded file
+            route_optimizer.UPLOADED_CSV_PATH = filepath
             # Reparse to load the new CC coordinates globally into memory
             route_optimizer.load_route_data()
-            return jsonify({"status": "success"})
+            return jsonify({"status": "success", "saved_to": filepath})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
