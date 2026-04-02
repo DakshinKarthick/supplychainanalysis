@@ -29,6 +29,12 @@ PYTHON = sys.executable  # Use the same Python that runs this server
 event_queues = []
 
 
+@app.route("/api/health", methods=["GET"])
+def health():
+    """Simple liveness check used by the frontend to wait for server startup."""
+    return jsonify({"status": "ok"})
+
+
 def send_event(data: dict):
     """Push an event to all connected SSE clients."""
     msg = json.dumps(data)
