@@ -1,0 +1,30 @@
+{
+  "name": "supply-chain-chaincode",
+  "version": "1.0.0",
+  "description": "Hyperledger Fabric chaincode for HMB milk route management (Supply Chain Analysis)",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "lint": "eslint src/ index.ts",
+    "start": "fabric-chaincode-node start",
+    "test": "mocha --require ts-node/register 'src/**/*.spec.ts'"
+  },
+  "engines": {
+    "node": ">=18.0"
+  },
+  "dependencies": {
+    "fabric-contract-api": "^2.5.0",
+    "fabric-shim": "^2.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "eslint": "^8.0.0",
+    "mocha": "^10.0.0",
+    "ts-node": "^10.0.0",
+    "typescript": "^5.0.0"
+  }
+}
