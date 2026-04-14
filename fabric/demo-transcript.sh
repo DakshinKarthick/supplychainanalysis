@@ -104,23 +104,12 @@ info "Scenario: The Python optimizer recommends assigning a new HMB"
 info "  'Thoppur Village' (lat 12.35, lon 78.55, 100 L) to ROUTE-04"
 info "  Insertion at position 3, adding 2.4 km, score 0.312"
 echo ""
+ASSIGN1_ARGS='{"function":"RecordHMBAssignment","Args":["ASSIGN-001","HMB-NEW-01","Thoppur Village","12.35","78.55","100","ROUTE-04","3","2.4","95.0","0.312","SupplyChainOptimizer-v2"]}'
+
 info "Running:"
-cat << 'EOF'
-  peer chaincode invoke \
-    -o localhost:7050 --ordererTLSHostnameOverride orderer.example.com \
-    --tls --cafile <ORDERER_CA> \
-    -C mychannel -n supply-chain \
-    --peerAddresses localhost:7051 --tlsRootCertFiles <ORG1_TLS> \
-    --peerAddresses localhost:9051 --tlsRootCertFiles <ORG2_TLS> \
-    -c '{"function":"RecordHMBAssignment","Args":[
-          "ASSIGN-001","HMB-NEW-01","Thoppur Village",
-          "12.35","78.55","100",
-          "ROUTE-04","3","2.4","95.0","0.312",
-          "SupplyChainOptimizer-v2"
-        ]}'
-EOF
+echo "  peer chaincode invoke ... -c '${ASSIGN1_ARGS}'"
 echo ""
-invoke '{"function":"RecordHMBAssignment","Args":["ASSIGN-001","HMB-NEW-01","Thoppur Village","12.35","78.55","100","ROUTE-04","3","2.4","95.0","0.312","SupplyChainOptimizer-v2"]}'
+invoke "${ASSIGN1_ARGS}"
 info "Transaction committed."
 
 # ── STEP 4: Verify assignment was persisted ────────────────────────────────────
